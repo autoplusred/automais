@@ -1,7 +1,7 @@
 import { supabase } from './supabase'
 
-// Em produção, a API estará no seu domínio.
-const API_URL = import.meta.env.VITE_API_URL || 'http://automais.ddns.net:5000/api'
+// Em produção, a API estará no Fly.io
+const API_URL = import.meta.env.VITE_API_URL || 'https://automais-api.fly.dev/api'
 
 export async function fetchWithAuth(endpoint, options = {}) {
   // Pega a sessão atual do Supabase
