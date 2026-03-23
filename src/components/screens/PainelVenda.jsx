@@ -1,40 +1,31 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useToast } from '../ui/Toast'
-
-// Mock DB
-const CLIENTES_DB = {
-  '43200000099': { name: 'Rodrigo Mendes', meta: 'CPF verificado · (85) 99999-1234 · 2 compras anteriores', initials: 'RM' },
-  '32100000088': { name: 'Beatriz Santos', meta: 'CPF verificado · (85) 98888-4567 · 1 compra anterior',   initials: 'BE' },
-}
-
-const VEICULOS = [
-  { emoji: '🚙', modelo: 'Corolla XEI 2020',   det: '62.000 km · Flex · BRA2A23',   preco: 'R$ 112.000' },
-  { emoji: '🚗', modelo: 'Fiat Argo 2023',      det: '18.000 km · Flex · CEA3B45',   preco: 'R$ 78.500' },
-  { emoji: '🚘', modelo: 'Honda Civic 2019',    det: '85.000 km · Flex · FOR4C67',   preco: 'R$ 89.000' },
-  { emoji: '🛻', modelo: 'Chevrolet S10 2021',  det: '45.000 km · Diesel · SAL5D89', preco: 'R$ 165.000' },
-]
+import { fetchWithAuth } from '../../services/apiBackend'
 
 const PGTOS = [
-  { icon: '⚡', name: 'Pix',                desc: 'Transferência instantânea' },
-  { icon: '💳', name: 'Cartão de Crédito',  desc: 'Parcelado ou à vista' },
-  { icon: '🏦', name: 'Boleto Bancário',    desc: 'Vencimento em até 30 dias' },
-  { icon: '🤝', name: 'Financiamento',      desc: 'Banco / Financeira parceira' },
-  { icon: '💵', name: 'Dinheiro',           desc: 'Pagamento em espécie' },
-  { icon: '🔄', name: 'Troca + Complemento', desc: 'Veículo + diferença' },
+  { icon: '⚡', name: 'Pix', code: 'pix', desc: 'Transferência instantânea' },
+  { icon: '💳', name: 'Cartão de Crédito', code: 'cartao', desc: 'Parcelado ou à vista' },
+  { icon: '🏦', name: 'Boleto Bancário', code: 'boleto', desc: 'Vencimento em até 30 dias' },
+  { icon: '🤝', name: 'Financiamento', code: 'financiamento', desc: 'Banco / Financeira parceira' },
+  { icon: '💵', name: 'Dinheiro', code: 'dinheiro', desc: 'Pagamento em espécie' },
+  { icon: '🔄', name: 'Troca + Complemento', code: 'troca', desc: 'Veículo + diferença' },
 ]
 
 export default function PainelVenda({ onOpenModal }) {
   const toast = useToast()
   const [step, setStep]         = useState(1)
   const [cpf, setCpf]           = useState('')
-  const [cliente, setCliente]   = useState(null)
+  const [cliente, setCliente]   = useState(null) // null|false|obj
+  const [searchingCliente, setSearchingCliente] = useState(false)
+  const [veiculos, setVeiculos] = useState([])
   const [veiculo, setVeiculo]   = useState(0)
   const [pgto, setPgto]         = useState(0)
-  const [valor, setValor]       = useState('112.000,00')
-  const [dataVenda, setData]    = useState('2026-03-19')
+  const [valor, setValor]       = useState('')
+  const [dataVenda, setData]    = useState(new Date().toISOString().slice(0, 10))
   const [parcelas, setParcelas] = useState('À vista')
   const [entrada, setEntrada]   = useState('')
   const [obs, setObs]           = useState('')
+  const [saving, setSaving]     = useState(false)
 
   function formatCpf(v) {
     let s = v.replace(/\D/g, '')
@@ -42,14 +33,90 @@ export default function PainelVenda({ onOpenModal }) {
     else if (s.length > 6) s = s.replace(/(\d{3})(\d{3})(\d{0,3})/, '$1.$2.$3')
     else if (s.length > 3) s = s.replace(/(\d{3})(\d{0,3})/, '$1.$2')
     setCpf(s)
-    const clean = s.replace(/\D/g, '')
-    if (clean.length === 11) setCliente(CLIENTES_DB[clean] || false)
-    else setCliente(null)
   }
 
-  function confirmarVenda() {
-    toast('✅ Venda registrada com sucesso!')
-    setTimeout(() => { setStep(1); setCpf(''); setCliente(null) }, 400)
+  useEffect(() => {
+    const clean = cpf.replace(/\D/g, '')
+    if (clean.length !== 11) {
+      setCliente(null)
+      return
+    }
+    const run = async () => {
+      setSearchingCliente(true)
+      try {
+        const data = await fetchWithAuth(`/clientes/cpf/${clean}`)
+        setCliente(data?.cliente || false)
+      } catch {
+        setCliente(false)
+      } finally {
+        setSearchingCliente(false)
+      }
+    }
+    run()
+  }, [cpf])
+
+  useEffect(() => {
+    const run = async () => {
+      try {
+        const data = await fetchWithAuth('/veiculos/?status=disponivel&limite=100')
+        setVeiculos(data.veiculos || [])
+        if (data.veiculos?.length) {
+          const v = data.veiculos[0]
+          setValor(Number(v.preco_venda || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+        }
+      } catch {
+        setVeiculos([])
+      }
+    }
+    run()
+  }, [])
+
+  useEffect(() => {
+    const v = veiculos[veiculo]
+    if (v) {
+      setValor(Number(v.preco_venda || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
+    }
+  }, [veiculo, veiculos])
+
+  function parseMoney(v) {
+    const clean = String(v || '').replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '')
+    return Number(clean || 0)
+  }
+
+  async function confirmarVenda() {
+    if (!cliente?.id) {
+      toast('Selecione um cliente válido')
+      return
+    }
+    if (!veiculos[veiculo]?.id) {
+      toast('Selecione um veículo disponível')
+      return
+    }
+    try {
+      setSaving(true)
+      const parcelasNum = parcelas === 'À vista' ? 1 : Number(parcelas.replace('x', '')) || 1
+      await fetchWithAuth('/vendas/', {
+        method: 'POST',
+        body: JSON.stringify({
+          veiculo_id: veiculos[veiculo].id,
+          cliente_id: cliente.id,
+          valor_venda: parseMoney(valor),
+          valor_entrada: parseMoney(entrada),
+          forma_pagamento: PGTOS[pgto].code,
+          parcelas: parcelasNum,
+          data_venda: dataVenda,
+          observacoes: obs,
+        }),
+      })
+      toast('✅ Venda registrada com sucesso!')
+      setStep(1)
+      setCpf('')
+      setCliente(null)
+    } catch (err) {
+      toast(err.message || 'Erro ao registrar venda')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const fmtDate = (d) => { const p = d.split('-'); return `${p[2]}/${p[1]}/${p[0]}` }
@@ -89,10 +156,10 @@ export default function PainelVenda({ onOpenModal }) {
 
             {cliente && (
               <div className="cpf-result show">
-                <div className="cpf-found-av">{cliente.initials}</div>
+                <div className="cpf-found-av">{(cliente.nome || '').slice(0, 2).toUpperCase()}</div>
                 <div style={{flex:1}}>
-                  <div className="cpf-found-name">{cliente.name}</div>
-                  <div className="cpf-found-meta">{cliente.meta}</div>
+                  <div className="cpf-found-name">{cliente.nome}</div>
+                  <div className="cpf-found-meta">{cliente.email || cliente.telefone || 'Cliente encontrado'}</div>
                 </div>
                 <button className="btn-p" onClick={() => setStep(2)}>Selecionar →</button>
               </div>
@@ -107,6 +174,9 @@ export default function PainelVenda({ onOpenModal }) {
                 </div>
                 <button className="btn-p" onClick={() => onOpenModal('novoCliente')}>+ Cadastrar</button>
               </div>
+            )}
+            {searchingCliente && (
+              <div style={{marginTop:8,fontSize:12,color:'var(--muted)'}}>Buscando cliente...</div>
             )}
           </div>
 
@@ -129,19 +199,22 @@ export default function PainelVenda({ onOpenModal }) {
           <div className="wizard-box">
             <div className="wiz-title">Selecionar Veículo</div>
             <div className="search-row" style={{marginBottom:14}}>
-              <input className="fi" placeholder="🔍  Filtrar por modelo, placa..." style={{maxWidth:280}} />
+              <div style={{fontSize:12,color:'var(--muted)'}}>Mostrando apenas veículos disponíveis em estoque</div>
             </div>
             <div className="vsel-grid">
-              {VEICULOS.map((v, i) => (
+              {veiculos.map((v, i) => (
                 <div key={i} className={`vsel-card ${veiculo === i ? 'selected' : ''}`} onClick={() => setVeiculo(i)}>
-                  <div className="vsel-img">{v.emoji}</div>
+                  <div className="vsel-img">{v.tipo === 'Moto' ? '🏍️' : '🚗'}</div>
                   <div className="vsel-info">
-                    <div className="vsel-modelo">{v.modelo}</div>
-                    <div className="vsel-det">{v.det}</div>
-                    <div className="vsel-preco">{v.preco}</div>
+                    <div className="vsel-modelo">{v.marca} {v.modelo}</div>
+                    <div className="vsel-det">{v.ano_modelo || '—'} · {(v.km || 0).toLocaleString('pt-BR')} km · {v.placa || 'SEM PLACA'}</div>
+                    <div className="vsel-preco">{Number(v.preco_venda || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
                   </div>
                 </div>
               ))}
+              {!veiculos.length && (
+                <div style={{fontSize:12,color:'var(--muted)'}}>Nenhum veículo disponível para venda.</div>
+              )}
             </div>
           </div>
           <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
@@ -204,9 +277,9 @@ export default function PainelVenda({ onOpenModal }) {
           <div className="wizard-box">
             <div className="wiz-title">Resumo da Venda</div>
             {[
-              ['Cliente',           cliente?.name || 'Cliente selecionado'],
-              ['Veículo',           VEICULOS[veiculo].modelo],
-              ['Placa',             VEICULOS[veiculo].det.split('·')[2]?.trim() || '—'],
+              ['Cliente',           cliente?.nome || 'Cliente selecionado'],
+              ['Veículo',           veiculos[veiculo] ? `${veiculos[veiculo].marca} ${veiculos[veiculo].modelo}` : '—'],
+              ['Placa',             veiculos[veiculo]?.placa || '—'],
               ['Forma de Pagamento', PGTOS[pgto].name],
               ['Parcelas',          parcelas],
               ['Data da Venda',     fmtDate(dataVenda)],
@@ -223,7 +296,7 @@ export default function PainelVenda({ onOpenModal }) {
           </div>
           <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
             <button className="btn-g" onClick={() => setStep(3)}>← Corrigir</button>
-            <button className="btn-p" onClick={confirmarVenda}>✅ Registrar Venda</button>
+            <button className="btn-p" onClick={confirmarVenda} disabled={saving}>{saving ? 'Registrando...' : '✅ Registrar Venda'}</button>
           </div>
         </div>
       )}

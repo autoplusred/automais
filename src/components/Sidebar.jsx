@@ -1,4 +1,10 @@
+import { useAuth } from '../context/AuthContext'
+
 export default function Sidebar({ active, onNav, sidebarOpen, onClose }) {
+  const { user, signOut } = useAuth()
+  const nome = user?.user_metadata?.nome || user?.email?.split('@')[0] || 'Usuário'
+  const perfil = user?.user_metadata?.perfil || 'Proprietário'
+  const initials = nome.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase()
   const items = [
     { id: 'painel',     icon: PainelIcon,   label: 'Painel Geral' },
     { id: 'venda',      icon: VendaIcon,    label: 'Painel de Venda' },
@@ -12,6 +18,13 @@ export default function Sidebar({ active, onNav, sidebarOpen, onClose }) {
   const sysItems = [
     { id: 'config', icon: ConfigIcon, label: 'Configurações' },
   ]
+
+  const handleLogout = async () => {
+    try {
+      await signOut()
+    } catch {
+    }
+  }
 
   const NavItem = ({ item }) => (
     <div
@@ -30,7 +43,7 @@ export default function Sidebar({ active, onNav, sidebarOpen, onClose }) {
       <nav className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-logo">
           <div className="logo-wrap">
-            <div className="logo-icon">A+</div>
+            <img className="brand-logo" src="/logo.png" alt="Auto+ logo" />
             <div className="logo-txt">Auto+<span>Gestão Simplificada</span></div>
           </div>
         </div>
@@ -51,12 +64,13 @@ export default function Sidebar({ active, onNav, sidebarOpen, onClose }) {
 
         <div className="sidebar-footer">
           <div className="user-wrap">
-            <div className="user-av">JP</div>
+            <div className="user-av">{initials}</div>
             <div>
-              <div className="user-name">João Pedro</div>
-              <div className="user-role">Proprietário</div>
+              <div className="user-name">{nome}</div>
+              <div className="user-role">{perfil}</div>
             </div>
           </div>
+          <button className="btn-g" style={{width:'100%',marginTop:10}} onClick={handleLogout}>Sair</button>
         </div>
       </nav>
     </>

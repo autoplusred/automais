@@ -24,7 +24,9 @@ export async function fetchWithAuth(endpoint, options = {}) {
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}))
-    throw new Error(err.erro || `Erro na requisição: ${response.status}`)
+    const error = new Error(err.erro || `Erro na requisição: ${response.status}`)
+    error.status = response.status
+    throw error
   }
 
   return response.json()

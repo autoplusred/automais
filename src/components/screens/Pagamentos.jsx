@@ -1,68 +1,91 @@
+import { useEffect, useMemo, useState } from 'react'
 import { useToast } from '../ui/Toast'
+import { fetchWithAuth } from '../../services/apiBackend'
 
-const GW_BR = [
-  { logo:'💚', name:'Mercado Pago',    desc:'Pix, cartão, boleto, link de pagamento', conn:true },
-  { logo:'🔵', name:'PagSeguro',       desc:'Cartão, Pix, débito, presencial' },
-  { logo:'🟠', name:'Asaas',           desc:'Pix, boleto, cartão, recorrente, NF-e' },
-  { logo:'🔵', name:'Cielo',           desc:'Maquininha + online, todas as bandeiras' },
-  { logo:'🟢', name:'Rede (Itaú)',     desc:'Cartão crédito/débito, Pix, maquininha' },
-  { logo:'🟡', name:'GetNet (Santander)', desc:'Cartão, Pix, online e presencial' },
-  { logo:'🟣', name:'Vindi',           desc:'Recorrente, boleto, Pix, BolePix, NF-e' },
-  { logo:'🔷', name:'Transfeera',      desc:'Pix + boleto combinados, B2B' },
-  { logo:'🟤', name:'PayU Brasil',     desc:'Pix, cartão, boleto, Google Pay' },
+const INTEGRACOES = [
+  { logo:'💚', name:'Mercado Pago', tokenKey:'mercadopago_token', desc:'Pix, cartão, boleto, link de pagamento' },
+  { logo:'🔵', name:'PagSeguro', tokenKey:'pagseguro_token', desc:'Cartão, Pix, débito, presencial' },
+  { logo:'🟠', name:'Asaas', tokenKey:'asaas_token', desc:'Pix, boleto, cartão, recorrente, NF-e' },
+  { logo:'🏦', name:'BV Financeira', tokenKey:'bv_token', desc:'Crédito veicular, CDC, leasing' },
 ]
 
-const GW_FIN = [
-  { logo:'🏦', name:'BV Financeira',        desc:'Crédito veicular, CDC, leasing', conn:true },
-  { logo:'🏦', name:'Santander Auto',       desc:'Financiamento com simulação online' },
-  { logo:'🏦', name:'Itaú Crédito Auto',    desc:'CDC, leasing, refinanciamento' },
-  { logo:'🏦', name:'Bradesco Financ.',     desc:'Financiamento veicular via API' },
-]
+export default function Pagamentos() {
+  const toast = useToast()
+  const [cfg, setCfg] = useState(null)
+  const [loading, setLoading] = useState(true)
 
-const GW_INTL = [
-  { logo:'🟣', name:'Stripe',   desc:'Pix, cartões BRL, internacional' },
-  { logo:'🔵', name:'PayPal',   desc:'Carteira digital, cartão, internacional' },
-  { logo:'⚫', name:'Adyen',    desc:'250+ métodos, enterprise, Pix' },
-]
+  useEffect(() => {
+    const carregar = async () => {
+      try {
+        setLoading(true)
+        const data = await fetchWithAuth('/config/')
+        setCfg(data)
+      } catch {
+        setCfg(null)
+      } finally {
+        setLoading(false)
+      }
+    }
+    carregar()
+  }, [])
 
-const GW_WALLET = [
-  { logo:'🍎', name:'Apple Pay',   desc:'Via Stripe ou Adyen' },
-  { logo:'🔍', name:'Google Pay',  desc:'Via Stripe, PayU ou Adyen' },
-  { logo:'⚡', name:'Pix Direto',  desc:'Chave Pix da sua conta bancária' },
-]
+  const gateways = useMemo(
+    () => INTEGRACOES.map((item) => ({
+      ...item,
+      conectado: !!cfg?.[item.tokenKey],
+    })),
+    [cfg],
+  )
 
-function PgSection({ title, items, onConnect }) {
+  const apis = useMemo(() => ([
+    { logo:'📊', name:'Tabela FIPE', enabled: !!cfg?.api_fipe },
+    { logo:'📮', name:'Consulta CEP', enabled: !!cfg?.api_cep },
+    { logo:'🔍', name:'Consulta Placa', enabled: !!cfg?.api_placa },
+  ]), [cfg])
+
+  const conectadas = gateways.filter((g) => g.conectado).length
+
   return (
-    <>
-      <div className="sec-title">{title}</div>
+    <div>
+      <p style={{fontSize:13.5,color:'var(--muted)',marginBottom:18,lineHeight:1.6}}>
+        Status real das integrações de pagamento da sua empresa. Para conectar ou alterar tokens, use a tela de Configurações.
+      </p>
+      <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:14}}>
+        <span className="badge b-g">{`${conectadas}/${gateways.length} gateways conectados`}</span>
+        <span className="badge b-a">{`${apis.filter((a) => a.enabled).length}/${apis.length} APIs habilitadas`}</span>
+      </div>
+
+      <div className="sec-title">Gateways Ativos</div>
       <div className="pg-grid">
-        {items.map((p, i) => (
-          <div key={i} className={`pg-card ${p.conn ? 'conn' : ''}`}>
+        {loading && <div style={{fontSize:13,color:'var(--muted)',padding:10}}>Carregando integrações...</div>}
+        {!loading && gateways.map((p) => (
+          <div key={p.name} className={`pg-card ${p.conectado ? 'conn' : ''}`}>
             <div className="pg-logo">{p.logo}</div>
             <div className="pg-name">{p.name}</div>
             <div className="pg-desc">{p.desc}</div>
-            {p.conn
-              ? <button className="btn-g pg-btn" onClick={() => onConnect(`Configurações do ${p.name}`)}>Configurar</button>
-              : <button className="btn-p pg-btn" onClick={() => onConnect(`Conectando ${p.name}...`)}>Conectar</button>
+            {p.conectado
+              ? <button className="btn-g pg-btn" onClick={() => toast(`${p.name} já está configurado`)}>Conectado</button>
+              : <button className="btn-p pg-btn" onClick={() => toast(`Configure o token de ${p.name} em Configurações`)}>
+                  Pendente
+                </button>
             }
           </div>
         ))}
       </div>
-    </>
-  )
-}
 
-export default function Pagamentos() {
-  const toast = useToast()
-  return (
-    <div>
-      <p style={{fontSize:13.5,color:'var(--muted)',marginBottom:18,lineHeight:1.6}}>
-        Conecte as plataformas de pagamento que você já usa. Cada uma estará disponível como opção na hora de registrar uma venda.
-      </p>
-      <PgSection title="Gateways Brasileiros"           items={GW_BR}     onConnect={toast} />
-      <PgSection title="Financeiras / Crédito Veicular" items={GW_FIN}    onConnect={toast} />
-      <PgSection title="Internacionais com Suporte ao Brasil" items={GW_INTL} onConnect={toast} />
-      <PgSection title="Carteiras Digitais"             items={GW_WALLET} onConnect={toast} />
+      <div className="sec-title" style={{marginTop:18}}>APIs Operacionais</div>
+      <div className="pg-grid">
+        {!loading && apis.map((api) => (
+          <div key={api.name} className={`pg-card ${api.enabled ? 'conn' : ''}`}>
+            <div className="pg-logo">{api.logo}</div>
+            <div className="pg-name">{api.name}</div>
+            <div className="pg-desc">{api.enabled ? 'Habilitada para uso no sistema' : 'Desabilitada na configuração atual'}</div>
+            <button className={`${api.enabled ? 'btn-g' : 'btn-p'} pg-btn`} onClick={() => toast('Gerencie no painel de Configurações')}>
+              {api.enabled ? 'Ativa' : 'Inativa'}
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

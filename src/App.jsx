@@ -32,18 +32,20 @@ function Inner() {
   const [page, setPage]   = useState('painel')
   const [sbOpen, setSb]   = useState(false)
   const [modal, setModal] = useState(null)
+  const [financeReload, setFinanceReload] = useState(0)
   
   const { user, loading } = useAuth()
 
   const openModal  = (id) => setModal(id)
   const closeModal = ()   => setModal(null)
+  const refreshFinanceiro = () => setFinanceReload(v => v + 1)
 
   const screens = {
     painel:     <Painel onNav={setPage} />,
     venda:      <PainelVenda onOpenModal={openModal} />,
     veiculos:   <Veiculos onOpenModal={openModal} />,
     clientes:   <Clientes onOpenModal={openModal} />,
-    financeiro: <Financeiro onOpenModal={openModal} />,
+    financeiro: <Financeiro onOpenModal={openModal} reloadSignal={financeReload} />,
     pagamentos: <Pagamentos />,
     config:     <Config />,
   }
@@ -90,8 +92,8 @@ function Inner() {
 
       <ModalNovoCliente open={modal === 'novoCliente'} onClose={closeModal} />
       <ModalAddVeiculo  open={modal === 'addVeiculo'}  onClose={closeModal} />
-      <ModalAddReceber  open={modal === 'addReceber'}  onClose={closeModal} />
-      <ModalAddPagar    open={modal === 'addPagar'}    onClose={closeModal} />
+      <ModalAddReceber  open={modal === 'addReceber'}  onClose={closeModal} onSuccess={refreshFinanceiro} />
+      <ModalAddPagar    open={modal === 'addPagar'}    onClose={closeModal} onSuccess={refreshFinanceiro} />
     </>
   )
 }

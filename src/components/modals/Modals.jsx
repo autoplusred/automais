@@ -3,6 +3,8 @@ import Modal from '../ui/Modal'
 import { useToast } from '../ui/Toast'
 import { useApiSettings } from '../../context/ApiSettings'
 import { fetchCep, fetchFipeMarcas, fetchFipeModelos, fetchFipeAnos, fetchFipePreco, fetchPlaca } from '../../services/api'
+import { fetchWithAuth } from '../../services/apiBackend'
+import { supabase } from '../../services/supabase'
 
 /* ══════════════════════════════════════════════
    MODAL NOVO CLIENTE — com CEP automático
@@ -15,6 +17,23 @@ export function ModalNovoCliente({ open, onClose }) {
   const [cep, setCep]         = useState('')
   const [cepStatus, setStatus]= useState(null) // null | 'loading' | 'ok' | 'error'
   const [addr, setAddr]       = useState({ street:'', neighborhood:'', city:'', state:'' })
+  const [saving, setSaving]   = useState(false)
+  const [form, setForm]       = useState({
+    nome: '',
+    cpf: '',
+    rg: '',
+    cnh: '',
+    data_nascimento: '',
+    estado_civil: 'Solteiro(a)',
+    telefone: '',
+    telefone_fixo: '',
+    email: '',
+    numero: '',
+    complemento: '',
+    profissao: '',
+    renda_mensal: '',
+    observacoes: '',
+  })
 
   async function handleCep(value) {
     const clean = value.replace(/\D/g,'')
@@ -43,6 +62,56 @@ export function ModalNovoCliente({ open, onClose }) {
 
   function reset() {
     setCep(''); setStatus(null); setAddr({ street:'', neighborhood:'', city:'', state:'' })
+    setForm({
+      nome: '',
+      cpf: '',
+      rg: '',
+      cnh: '',
+      data_nascimento: '',
+      estado_civil: 'Solteiro(a)',
+      telefone: '',
+      telefone_fixo: '',
+      email: '',
+      numero: '',
+      complemento: '',
+      profissao: '',
+      renda_mensal: '',
+      observacoes: '',
+    })
+  }
+
+  const parseMoney = (v) => {
+    const clean = String(v || '').replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '')
+    return Number(clean || 0)
+  }
+
+  const submit = async () => {
+    if (!form.nome.trim()) {
+      toast('Nome é obrigatório')
+      return
+    }
+    try {
+      setSaving(true)
+      await fetchWithAuth('/clientes/', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...form,
+          renda_mensal: parseMoney(form.renda_mensal),
+          cep,
+          logradouro: addr.street,
+          bairro: addr.neighborhood,
+          cidade: addr.city,
+          estado: addr.state,
+        }),
+      })
+      onClose()
+      reset()
+      toast('✅ Cliente cadastrado!')
+    } catch (err) {
+      toast(err.message || 'Erro ao cadastrar cliente')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -50,21 +119,21 @@ export function ModalNovoCliente({ open, onClose }) {
 
       <SectionLbl>Dados Pessoais</SectionLbl>
       <div className="form-grid">
-        <div className="fg full"><div className="fl">Nome Completo</div><input className="fi" placeholder="Nome e sobrenome" /></div>
-        <div className="fg"><div className="fl">CPF</div><input className="fi" placeholder="000.000.000-00" /></div>
-        <div className="fg"><div className="fl">RG</div><input className="fi" placeholder="0000000 SSP/CE" /></div>
-        <div className="fg"><div className="fl">CNH (se houver)</div><input className="fi" placeholder="Número da CNH" /></div>
-        <div className="fg"><div className="fl">Data de Nascimento</div><input className="fi" type="date" /></div>
+        <div className="fg full"><div className="fl">Nome Completo</div><input className="fi" placeholder="Nome e sobrenome" value={form.nome} onChange={e => setForm(v => ({ ...v, nome: e.target.value }))} /></div>
+        <div className="fg"><div className="fl">CPF</div><input className="fi" placeholder="000.000.000-00" value={form.cpf} onChange={e => setForm(v => ({ ...v, cpf: e.target.value }))} /></div>
+        <div className="fg"><div className="fl">RG</div><input className="fi" placeholder="0000000 SSP/CE" value={form.rg} onChange={e => setForm(v => ({ ...v, rg: e.target.value }))} /></div>
+        <div className="fg"><div className="fl">CNH (se houver)</div><input className="fi" placeholder="Número da CNH" value={form.cnh} onChange={e => setForm(v => ({ ...v, cnh: e.target.value }))} /></div>
+        <div className="fg"><div className="fl">Data de Nascimento</div><input className="fi" type="date" value={form.data_nascimento} onChange={e => setForm(v => ({ ...v, data_nascimento: e.target.value }))} /></div>
         <div className="fg"><div className="fl">Estado Civil</div>
-          <select className="fi"><option>Solteiro(a)</option><option>Casado(a)</option><option>Divorciado(a)</option><option>Viúvo(a)</option></select>
+          <select className="fi" value={form.estado_civil} onChange={e => setForm(v => ({ ...v, estado_civil: e.target.value }))}><option>Solteiro(a)</option><option>Casado(a)</option><option>Divorciado(a)</option><option>Viúvo(a)</option></select>
         </div>
       </div>
 
       <SectionLbl>Contato</SectionLbl>
       <div className="form-grid">
-        <div className="fg"><div className="fl">WhatsApp / Celular</div><input className="fi" placeholder="(00) 00000-0000" /></div>
-        <div className="fg"><div className="fl">Telefone Fixo</div><input className="fi" placeholder="(00) 0000-0000 (opcional)" /></div>
-        <div className="fg full"><div className="fl">E-mail</div><input className="fi" placeholder="email@exemplo.com" /></div>
+        <div className="fg"><div className="fl">WhatsApp / Celular</div><input className="fi" placeholder="(00) 00000-0000" value={form.telefone} onChange={e => setForm(v => ({ ...v, telefone: e.target.value }))} /></div>
+        <div className="fg"><div className="fl">Telefone Fixo</div><input className="fi" placeholder="(00) 0000-0000 (opcional)" value={form.telefone_fixo} onChange={e => setForm(v => ({ ...v, telefone_fixo: e.target.value }))} /></div>
+        <div className="fg full"><div className="fl">E-mail</div><input className="fi" placeholder="email@exemplo.com" value={form.email} onChange={e => setForm(v => ({ ...v, email: e.target.value }))} /></div>
       </div>
 
       <SectionLbl>Endereço</SectionLbl>
@@ -111,20 +180,20 @@ export function ModalNovoCliente({ open, onClose }) {
           <div className="fl">Rua / Logradouro</div>
           <input className="fi" placeholder="Av. / Rua / Travessa..." value={addr.street} onChange={e => setAddr(a=>({...a,street:e.target.value}))} />
         </div>
-        <div className="fg"><div className="fl">Número</div><input className="fi" placeholder="Nº" /></div>
-        <div className="fg"><div className="fl">Complemento</div><input className="fi" placeholder="Apto, casa, bloco..." /></div>
+        <div className="fg"><div className="fl">Número</div><input className="fi" placeholder="Nº" value={form.numero} onChange={e => setForm(v => ({ ...v, numero: e.target.value }))} /></div>
+        <div className="fg"><div className="fl">Complemento</div><input className="fi" placeholder="Apto, casa, bloco..." value={form.complemento} onChange={e => setForm(v => ({ ...v, complemento: e.target.value }))} /></div>
       </div>
 
       <SectionLbl>Renda / Financeiro</SectionLbl>
       <div className="form-grid">
-        <div className="fg"><div className="fl">Profissão</div><input className="fi" placeholder="Ex: Autônomo, CLT..." /></div>
-        <div className="fg"><div className="fl">Renda Mensal (R$)</div><input className="fi" placeholder="0.000,00" /></div>
-        <div className="fg full"><div className="fl">Referências / Obs.</div><textarea className="fi ta" placeholder="Nome de referência, indicação por..." /></div>
+        <div className="fg"><div className="fl">Profissão</div><input className="fi" placeholder="Ex: Autônomo, CLT..." value={form.profissao} onChange={e => setForm(v => ({ ...v, profissao: e.target.value }))} /></div>
+        <div className="fg"><div className="fl">Renda Mensal (R$)</div><input className="fi" placeholder="0.000,00" value={form.renda_mensal} onChange={e => setForm(v => ({ ...v, renda_mensal: e.target.value }))} /></div>
+        <div className="fg full"><div className="fl">Referências / Obs.</div><textarea className="fi ta" placeholder="Nome de referência, indicação por..." value={form.observacoes} onChange={e => setForm(v => ({ ...v, observacoes: e.target.value }))} /></div>
       </div>
 
       <div className="modal-actions">
         <button className="btn-g" onClick={() => { onClose(); reset() }}>Cancelar</button>
-        <button className="btn-p" onClick={() => { onClose(); reset(); toast('✅ Cliente cadastrado!') }}>Cadastrar</button>
+        <button className="btn-p" onClick={submit} disabled={saving}>{saving ? 'Salvando...' : 'Cadastrar'}</button>
       </div>
     </Modal>
   )
@@ -133,7 +202,7 @@ export function ModalNovoCliente({ open, onClose }) {
 /* ══════════════════════════════════════════════
    MODAL ADD VEÍCULO — placa lookup + FIPE
 ══════════════════════════════════════════════ */
-export function ModalAddVeiculo({ open, onClose }) {
+export function ModalAddVeiculo({ open, onClose, onSuccess }) {
   const toast = useToast()
   const { isEnabled, getToken } = useApiSettings()
   const fipeEnabled  = isEnabled('fipe')
@@ -146,10 +215,12 @@ export function ModalAddVeiculo({ open, onClose }) {
   // Campos preenchidos
   const [tipo, setTipo]           = useState('carros')
   const [form, setForm]           = useState({
-    modelo:'', versao:'', anoFab:'', anoMod:'', renavam:'', chassi:'',
+    marca:'', modelo:'', versao:'', anoFab:'', anoMod:'', renavam:'', chassi:'',
     km:'', combustivel:'Flex', cambio:'Manual', cor:'', tipoV:'Hatch',
     custoPrev:'', vendaPrev:'', obs:'',
   })
+  const [fotos, setFotos]         = useState([])
+  const [saving, setSaving]       = useState(false)
 
   // FIPE cascading
   const [marcas, setMarcas]       = useState([])
@@ -187,7 +258,18 @@ export function ModalAddVeiculo({ open, onClose }) {
     if (!selAno || !fipeEnabled) return
     setFipeLoad(true); setFipePreco(null)
     fetchFipePreco(tipo, selMarca, selModelo, selAno)
-      .then(d => { setFipePreco(d); setFipeLoad(false) })
+      .then(d => {
+        setFipePreco(d)
+        setForm(v => ({
+          ...v,
+          marca: d?.brand || v.marca,
+          modelo: d?.model || v.modelo,
+          anoFab: d?.modelYear ? String(d.modelYear) : v.anoFab,
+          anoMod: d?.modelYear ? String(d.modelYear) : v.anoMod,
+          custoPrev: d?.price ? String(d.price).replace('R$','').trim() : v.custoPrev,
+        }))
+        setFipeLoad(false)
+      })
       .catch(() => setFipeLoad(false))
   }, [selAno, selMarca, selModelo, tipo, fipeEnabled])
 
@@ -202,6 +284,7 @@ export function ModalAddVeiculo({ open, onClose }) {
       const d = await fetchPlaca(clean, token)
       setForm(f => ({
         ...f,
+        marca:      d.marca      || f.marca,
         modelo:     d.modelo     || f.modelo,
         versao:     d.versao     || f.versao,
         anoFab:     String(d.anoFabricacao || f.anoFab),
@@ -221,11 +304,122 @@ export function ModalAddVeiculo({ open, onClose }) {
 
   function reset() {
     setPlaca(''); setPlacaSt(null)
-    setForm({modelo:'',versao:'',anoFab:'',anoMod:'',renavam:'',chassi:'',km:'',combustivel:'Flex',cambio:'Manual',cor:'',tipoV:'Hatch',custoPrev:'',vendaPrev:'',obs:''})
+    setForm({marca:'',modelo:'',versao:'',anoFab:'',anoMod:'',renavam:'',chassi:'',km:'',combustivel:'Flex',cambio:'Manual',cor:'',tipoV:'Hatch',custoPrev:'',vendaPrev:'',obs:''})
     setSelMarca(''); setSelModelo(''); setSelAno(''); setFipePreco(null)
+    setFotos([])
   }
 
   const f = (key) => ({ value: form[key], onChange: e => setForm(p=>({...p,[key]:e.target.value})) })
+  const parseMoney = (v) => {
+    if (v === null || v === undefined) return 0
+    const clean = String(v).replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '')
+    return Number(clean || 0)
+  }
+
+  const MAX_FOTOS = 10
+  const MAX_FOTO_MB = 8
+  const MAX_TOTAL_MB = 30
+
+  const validExt = (name = '') => {
+    const ext = String(name).toLowerCase().split('.').pop()
+    if (ext === 'jpg' || ext === 'jpeg' || ext === 'png' || ext === 'webp') return ext
+    return null
+  }
+
+  const validateFotos = () => {
+    if (!fotos.length) return
+    if (fotos.length > MAX_FOTOS) throw new Error(`Selecione no máximo ${MAX_FOTOS} fotos por veículo`)
+    const totalBytes = fotos.reduce((acc, file) => acc + (file?.size || 0), 0)
+    for (const file of fotos) {
+      if (!file?.type?.startsWith('image/')) throw new Error(`Arquivo inválido: ${file?.name || 'sem nome'}`)
+      const ext = validExt(file?.name)
+      if (!ext) throw new Error(`Formato não suportado: ${file?.name || 'arquivo'}`)
+      if ((file.size || 0) > MAX_FOTO_MB * 1024 * 1024) throw new Error(`A foto ${file.name} excede ${MAX_FOTO_MB}MB`)
+    }
+    if (totalBytes > MAX_TOTAL_MB * 1024 * 1024) throw new Error(`Total de fotos excede ${MAX_TOTAL_MB}MB`)
+  }
+
+  const uploadFotos = async () => {
+    if (!fotos.length) return []
+    validateFotos()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user?.id) throw new Error('Sessão inválida para upload de fotos')
+    const bucket = import.meta.env.VITE_SUPABASE_VEHICLE_BUCKET || 'veiculos'
+    const empresaId = session.user?.user_metadata?.empresa_id || session.user?.app_metadata?.empresa_id || 'sem_empresa'
+    const uploaded = []
+    const uploadedPaths = []
+    const dataPath = new Date().toISOString().slice(0, 10)
+    try {
+      for (const file of fotos) {
+        const ext = validExt(file.name) || 'jpg'
+        const filePath = `${empresaId}/${session.user.id}/${dataPath}/${Date.now()}-${crypto.randomUUID()}.${ext}`
+        const { error } = await supabase.storage.from(bucket).upload(filePath, file, { upsert: false })
+        if (error) throw new Error(`Falha no upload de ${file.name}: ${error.message}`)
+        uploadedPaths.push(filePath)
+        const { data } = supabase.storage.from(bucket).getPublicUrl(filePath)
+        if (data?.publicUrl) uploaded.push(data.publicUrl)
+      }
+    } catch (err) {
+      if (uploadedPaths.length) await supabase.storage.from(bucket).remove(uploadedPaths)
+      throw err
+    }
+    return uploaded
+  }
+
+  const handleCreate = async () => {
+    try {
+      setSaving(true)
+      let marcaNome = form.marca
+      let modeloNome = form.modelo
+      if (fipeEnabled && selMarca && selModelo) {
+        marcaNome = marcas.find(m => String(m.valor) === String(selMarca))?.nome || marcaNome
+        modeloNome = modelos.find(m => String(m.code) === String(selModelo))?.name || modeloNome
+      }
+      if (!marcaNome || !modeloNome) {
+        toast('Preencha marca e modelo do veículo')
+        return
+      }
+      const fotosUrls = await uploadFotos()
+      const obsFotos = fotosUrls.length ? `${form.obs ? `${form.obs}\n\n` : ''}Fotos:\n${fotosUrls.join('\n')}` : form.obs
+      await fetchWithAuth('/veiculos/', {
+        method: 'POST',
+        body: JSON.stringify({
+          placa,
+          renavam: form.renavam,
+          chassi: form.chassi,
+          fipe_codigo: fipePreco?.fipeCode,
+          fipe_marca: fipePreco?.brand,
+          fipe_marca_cod: selMarca || null,
+          fipe_modelo: fipePreco?.model,
+          fipe_modelo_cod: selModelo || null,
+          fipe_ano_cod: selAno || null,
+          fipe_preco: parseMoney((fipePreco?.price || '').replace('R$', '').trim()),
+          fipe_referencia: fipePreco?.referenceMonth || null,
+          marca: marcaNome,
+          modelo: modeloNome,
+          versao: form.versao,
+          tipo: form.tipoV,
+          ano_fabricacao: form.anoFab || null,
+          ano_modelo: form.anoMod || null,
+          km: form.km || 0,
+          cor: form.cor,
+          combustivel: form.combustivel,
+          cambio: form.cambio,
+          preco_custo: parseMoney(form.custoPrev),
+          preco_venda: parseMoney(form.vendaPrev),
+          observacoes: obsFotos,
+        }),
+      })
+      onClose()
+      reset()
+      if (onSuccess) onSuccess()
+      toast('Veículo cadastrado com sucesso!')
+    } catch (err) {
+      toast(err.message || 'Erro ao cadastrar veículo')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <Modal title="+ Novo Veículo" open={open} onClose={() => { onClose(); reset() }}>
@@ -263,7 +457,14 @@ export function ModalAddVeiculo({ open, onClose }) {
             <button key={val}
               className={tipo === val ? 'btn-p' : 'btn-g'}
               style={{flex:1,fontSize:12,padding:'7px 0'}}
-              onClick={() => { setTipo(val); setSelMarca(''); setSelModelo(''); setSelAno(''); setFipePreco(null) }}
+              onClick={() => {
+                setTipo(val)
+                setSelMarca('')
+                setSelModelo('')
+                setSelAno('')
+                setFipePreco(null)
+                setForm(v => ({ ...v, tipoV: val === 'motos' ? 'Moto' : val === 'caminhoes' ? 'Caminhão' : 'Hatch' }))
+              }}
             >{lbl}</button>
           ))}
         </div>
@@ -325,7 +526,8 @@ export function ModalAddVeiculo({ open, onClose }) {
 
       {/* ── Dados do veículo ── */}
       <div className="form-grid">
-        <div className="fg"><div className="fl">Marca / Modelo</div><input className="fi" placeholder="Ex: Fiat Argo" {...f('modelo')} /></div>
+        <div className="fg"><div className="fl">Marca</div><input className="fi" placeholder="Ex: Fiat" {...f('marca')} /></div>
+        <div className="fg"><div className="fl">Modelo</div><input className="fi" placeholder="Ex: Argo" {...f('modelo')} /></div>
         <div className="fg"><div className="fl">Versão</div><input className="fi" placeholder="Ex: 1.3 Drive Flex" {...f('versao')} /></div>
         <div className="fg"><div className="fl">Ano Fabricação</div><input className="fi" type="number" placeholder="2023" {...f('anoFab')} /></div>
         <div className="fg"><div className="fl">Ano Modelo</div><input className="fi" type="number" placeholder="2024" {...f('anoMod')} /></div>
@@ -349,12 +551,23 @@ export function ModalAddVeiculo({ open, onClose }) {
         </div>
         <div className="fg"><div className="fl">Preço de Custo (R$)</div><input className="fi" placeholder="0,00" {...f('custoPrev')} /></div>
         <div className="fg"><div className="fl">Preço de Venda (R$)</div><input className="fi" placeholder="0,00" {...f('vendaPrev')} /></div>
+        <div className="fg full">
+          <div className="fl">Fotos do Veículo</div>
+          <input
+            className="fi"
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={e => setFotos(Array.from(e.target.files || []))}
+          />
+          {!!fotos.length && <div style={{fontSize:11,color:'var(--muted)',marginTop:6}}>{fotos.length} arquivo(s) selecionado(s)</div>}
+        </div>
         <div className="fg full"><div className="fl">Observações / Opcionais</div><textarea className="fi ta" placeholder="IPVA pago, vidros elétricos, rodas de liga..." {...f('obs')} /></div>
       </div>
 
       <div className="modal-actions">
         <button className="btn-g" onClick={() => { onClose(); reset() }}>Cancelar</button>
-        <button className="btn-p" onClick={() => { onClose(); reset(); toast('Veículo adicionado ao estoque!') }}>Cadastrar</button>
+        <button className="btn-p" onClick={handleCreate} disabled={saving}>{saving ? 'Salvando...' : 'Cadastrar'}</button>
       </div>
     </Modal>
   )
@@ -363,23 +576,91 @@ export function ModalAddVeiculo({ open, onClose }) {
 /* ══════════════════════════════════════════════
    MODAL REGISTRAR RECEBIMENTO
 ══════════════════════════════════════════════ */
-export function ModalAddReceber({ open, onClose }) {
+export function ModalAddReceber({ open, onClose, onSuccess }) {
   const toast = useToast()
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [parcelas, setParcelas] = useState([])
+  const [parcelaId, setParcelaId] = useState('')
+  const [dataPagamento, setDataPagamento] = useState(new Date().toISOString().slice(0, 10))
+  const [forma, setForma] = useState('pix')
+  const [observacoes, setObservacoes] = useState('')
+
+  useEffect(() => {
+    if (!open) return
+    const carregar = async () => {
+      try {
+        setLoading(true)
+        const data = await fetchWithAuth('/financeiro/parcelas?limite=100')
+        const pendentes = (data.parcelas || []).filter((p) => p.status === 'pendente' || p.status === 'vencido')
+        setParcelas(pendentes)
+        setParcelaId(pendentes[0]?.id || '')
+      } catch {
+        setParcelas([])
+        setParcelaId('')
+      } finally {
+        setLoading(false)
+      }
+    }
+    carregar()
+  }, [open])
+
+  const confirm = async () => {
+    if (!parcelaId) {
+      toast('Selecione uma parcela')
+      return
+    }
+    try {
+      setSaving(true)
+      await fetchWithAuth(`/financeiro/parcelas/${parcelaId}/receber`, {
+        method: 'POST',
+        body: JSON.stringify({
+          data_pagamento: dataPagamento,
+          forma_pagamento: forma,
+          observacoes,
+        }),
+      })
+      if (onSuccess) onSuccess()
+      onClose()
+      toast('Recebimento registrado!')
+    } catch (err) {
+      toast(err.message || 'Erro ao registrar recebimento')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const money = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+
   return (
     <Modal title="+ Registrar Recebimento" open={open} onClose={onClose}>
       <div className="form-grid">
-        <div className="fg full"><div className="fl">Descrição</div><input className="fi" placeholder="Ex: Parcela 3/18 — Carlos Mendes / Etios" /></div>
-        <div className="fg"><div className="fl">Valor (R$)</div><input className="fi" placeholder="0,00" /></div>
-        <div className="fg"><div className="fl">Data de Recebimento</div><input className="fi" type="date" defaultValue="2026-03-19" /></div>
-        <div className="fg"><div className="fl">Forma de Pagamento</div>
-          <select className="fi"><option>Pix</option><option>Dinheiro</option><option>Cartão</option><option>Boleto</option><option>TED/DOC</option></select>
+        <div className="fg full">
+          <div className="fl">Parcela</div>
+          <select className="fi" value={parcelaId} onChange={(e) => setParcelaId(e.target.value)} disabled={loading || !parcelas.length}>
+            {!parcelas.length && <option value="">{loading ? 'Carregando parcelas...' : 'Nenhuma parcela pendente'}</option>}
+            {parcelas.map((p) => (
+              <option key={p.id} value={p.id}>
+                {`${p.cliente_nome || 'Cliente'} · ${p.veiculo || 'Veículo'} · ${money(p.valor)} · ${p.numero}/${p.total}`}
+              </option>
+            ))}
+          </select>
         </div>
-        <div className="fg"><div className="fl">Número da Parcela</div><input className="fi" placeholder="Ex: 3/18" /></div>
-        <div className="fg full"><div className="fl">Observações</div><textarea className="fi ta" placeholder="Anotações sobre este recebimento..." /></div>
+        <div className="fg"><div className="fl">Data de Recebimento</div><input className="fi" type="date" value={dataPagamento} onChange={(e) => setDataPagamento(e.target.value)} /></div>
+        <div className="fg"><div className="fl">Forma de Pagamento</div>
+          <select className="fi" value={forma} onChange={(e) => setForma(e.target.value)}>
+            <option value="pix">Pix</option>
+            <option value="dinheiro">Dinheiro</option>
+            <option value="cartao">Cartão</option>
+            <option value="boleto">Boleto</option>
+            <option value="ted">TED/DOC</option>
+          </select>
+        </div>
+        <div className="fg full"><div className="fl">Observações</div><textarea className="fi ta" placeholder="Anotações sobre este recebimento..." value={observacoes} onChange={(e) => setObservacoes(e.target.value)} /></div>
       </div>
       <div className="modal-actions">
         <button className="btn-g" onClick={onClose}>Cancelar</button>
-        <button className="btn-p" onClick={() => { onClose(); toast('Recebimento registrado!') }}>Confirmar</button>
+        <button className="btn-p" onClick={confirm} disabled={saving || !parcelas.length}>{saving ? 'Salvando...' : 'Confirmar'}</button>
       </div>
     </Modal>
   )
@@ -388,27 +669,105 @@ export function ModalAddReceber({ open, onClose }) {
 /* ══════════════════════════════════════════════
    MODAL LANÇAR DESPESA
 ══════════════════════════════════════════════ */
-export function ModalAddPagar({ open, onClose }) {
+export function ModalAddPagar({ open, onClose, onSuccess }) {
   const toast = useToast()
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({
+    descricao: '',
+    categoria: 'outro',
+    valor: '',
+    data_vencimento: '',
+    recorrente: 'nao',
+    forma_pagamento: 'pix',
+    observacoes: '',
+  })
+
+  const parseMoney = (v) => {
+    const clean = String(v || '').replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '')
+    return Number(clean || 0)
+  }
+
+  const submit = async () => {
+    if (!form.descricao.trim()) {
+      toast('Descrição é obrigatória')
+      return
+    }
+    if (!form.data_vencimento) {
+      toast('Informe o vencimento')
+      return
+    }
+    try {
+      setSaving(true)
+      await fetchWithAuth('/financeiro/contas', {
+        method: 'POST',
+        body: JSON.stringify({
+          descricao: form.descricao,
+          categoria: form.categoria,
+          valor: parseMoney(form.valor),
+          data_vencimento: form.data_vencimento,
+          recorrente: form.recorrente,
+          forma_pagamento: form.forma_pagamento,
+          observacoes: form.observacoes,
+        }),
+      })
+      if (onSuccess) onSuccess()
+      onClose()
+      setForm({
+        descricao: '',
+        categoria: 'outro',
+        valor: '',
+        data_vencimento: '',
+        recorrente: 'nao',
+        forma_pagamento: 'pix',
+        observacoes: '',
+      })
+      toast('Despesa lançada!')
+    } catch (err) {
+      toast(err.message || 'Erro ao lançar despesa')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <Modal title="+ Lançar Despesa" open={open} onClose={onClose}>
       <div className="form-grid">
-        <div className="fg full"><div className="fl">Descrição</div><input className="fi" placeholder="Ex: Conta de energia, salário, aluguel..." /></div>
+        <div className="fg full"><div className="fl">Descrição</div><input className="fi" placeholder="Ex: Conta de energia, salário, aluguel..." value={form.descricao} onChange={(e) => setForm(v => ({ ...v, descricao: e.target.value }))} /></div>
         <div className="fg"><div className="fl">Categoria</div>
-          <select className="fi"><option>Salário</option><option>Aluguel</option><option>Energia</option><option>Água</option><option>Internet</option><option>Combustível</option><option>Manutenção</option><option>Imposto</option><option>Outro</option></select>
+          <select className="fi" value={form.categoria} onChange={(e) => setForm(v => ({ ...v, categoria: e.target.value }))}>
+            <option value="salario">Salário</option>
+            <option value="aluguel">Aluguel</option>
+            <option value="energia">Energia</option>
+            <option value="agua">Água</option>
+            <option value="internet">Internet</option>
+            <option value="combustivel">Combustível</option>
+            <option value="manutencao">Manutenção</option>
+            <option value="imposto">Imposto</option>
+            <option value="outro">Outro</option>
+          </select>
         </div>
-        <div className="fg"><div className="fl">Valor (R$)</div><input className="fi" placeholder="0,00" /></div>
-        <div className="fg"><div className="fl">Vencimento</div><input className="fi" type="date" /></div>
+        <div className="fg"><div className="fl">Valor (R$)</div><input className="fi" placeholder="0,00" value={form.valor} onChange={(e) => setForm(v => ({ ...v, valor: e.target.value }))} /></div>
+        <div className="fg"><div className="fl">Vencimento</div><input className="fi" type="date" value={form.data_vencimento} onChange={(e) => setForm(v => ({ ...v, data_vencimento: e.target.value }))} /></div>
         <div className="fg"><div className="fl">Recorrente?</div>
-          <select className="fi"><option>Não, pagamento único</option><option>Mensal</option><option>Anual</option></select>
+          <select className="fi" value={form.recorrente} onChange={(e) => setForm(v => ({ ...v, recorrente: e.target.value }))}>
+            <option value="nao">Não, pagamento único</option>
+            <option value="mensal">Mensal</option>
+            <option value="anual">Anual</option>
+          </select>
         </div>
         <div className="fg"><div className="fl">Forma de Pagamento</div>
-          <select className="fi"><option>Pix</option><option>Débito automático</option><option>Boleto</option><option>Dinheiro</option></select>
+          <select className="fi" value={form.forma_pagamento} onChange={(e) => setForm(v => ({ ...v, forma_pagamento: e.target.value }))}>
+            <option value="pix">Pix</option>
+            <option value="debito_automatico">Débito automático</option>
+            <option value="boleto">Boleto</option>
+            <option value="dinheiro">Dinheiro</option>
+          </select>
         </div>
+        <div className="fg full"><div className="fl">Observações</div><textarea className="fi ta" placeholder="Detalhes adicionais..." value={form.observacoes} onChange={(e) => setForm(v => ({ ...v, observacoes: e.target.value }))} /></div>
       </div>
       <div className="modal-actions">
         <button className="btn-g" onClick={onClose}>Cancelar</button>
-        <button className="btn-p" onClick={() => { onClose(); toast('Despesa lançada!') }}>Lançar</button>
+        <button className="btn-p" onClick={submit} disabled={saving}>{saving ? 'Salvando...' : 'Lançar'}</button>
       </div>
     </Modal>
   )

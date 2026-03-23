@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react'
 import { useToast } from '../ui/Toast'
 import { useApiSettings } from '../../context/ApiSettings'
+import { fetchWithAuth } from '../../services/apiBackend'
 
 function Toggle({ enabled, onToggle }) {
   return (
@@ -40,19 +42,124 @@ const APIS = [
 export default function Config() {
   const toast = useToast()
   const { settings, toggle, getToken, setToken } = useApiSettings()
+  const [empresaMeta, setEmpresaMeta] = useState({
+    id: '',
+    plano: 'basico',
+    ativo: true,
+    criadoEm: '',
+    responsavel: '',
+    responsavelEmail: '',
+  })
+  const [empresa, setEmpresa] = useState({
+    nome: '',
+    cnpj: '',
+    telefone: '',
+    email: '',
+    cep: '',
+    logradouro: '',
+    numero: '',
+    bairro: '',
+    cidade: '',
+    estado: '',
+  })
+  const [salvando, setSalvando] = useState(false)
+  const toggleApi = async (apiKey) => {
+    const ativo = !settings[apiKey]?.enabled
+    toggle(apiKey)
+    try {
+      await fetchWithAuth('/config/api-toggle', {
+        method: 'PUT',
+        body: JSON.stringify({ api: apiKey, ativo }),
+      })
+    } catch {
+    }
+  }
+
+  useEffect(() => {
+    const carregar = async () => {
+      try {
+        const [cfg, me] = await Promise.all([
+          fetchWithAuth('/config/'),
+          fetchWithAuth('/auth/me'),
+        ])
+        setEmpresa({
+          nome: cfg.empresa_nome || '',
+          cnpj: cfg.cnpj || '',
+          telefone: cfg.telefone || '',
+          email: cfg.email || '',
+          cep: cfg.cep || '',
+          logradouro: cfg.logradouro || '',
+          numero: cfg.numero || '',
+          bairro: cfg.bairro || '',
+          cidade: cfg.cidade || '',
+          estado: cfg.estado || '',
+        })
+        setEmpresaMeta({
+          id: cfg.empresa_id || me.empresa_id || '',
+          plano: cfg.plano || 'basico',
+          ativo: cfg.ativo !== false,
+          criadoEm: cfg.criado_em || '',
+          responsavel: me.nome || '',
+          responsavelEmail: me.email || '',
+        })
+      } catch {
+      }
+    }
+    carregar()
+  }, [])
+
+  const saveEmpresa = async () => {
+    try {
+      setSalvando(true)
+      await fetchWithAuth('/config/', {
+        method: 'PUT',
+        body: JSON.stringify(empresa),
+      })
+      toast('Dados da empresa salvos!')
+    } catch (err) {
+      toast(err.message || 'Erro ao salvar dados')
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  const cadastroCompleto = Boolean(
+    empresa.nome && empresa.cnpj && empresa.telefone && empresa.email && empresa.cidade && empresa.estado,
+  )
+  const dataCriacao = empresaMeta.criadoEm ? new Date(empresaMeta.criadoEm).toLocaleDateString('pt-BR') : '-'
 
   return (
     <div>
       <div style={{background:'var(--glass)',border:'1px solid var(--border)',borderRadius:13,padding:22,marginBottom:14}}>
+        <div className="sec-title" style={{marginBottom:8}}>Painel de Cadastro da Empresa</div>
+        <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:12}}>
+          <span className={`badge ${empresaMeta.ativo ? 'b-g' : 'b-m'}`}>{empresaMeta.ativo ? 'Empresa ativa' : 'Empresa inativa'}</span>
+          <span className="badge b-a">{`Plano ${String(empresaMeta.plano || 'basico').toUpperCase()}`}</span>
+          <span className={`badge ${cadastroCompleto ? 'b-g' : 'b-m'}`}>{cadastroCompleto ? 'Cadastro completo' : 'Cadastro incompleto'}</span>
+        </div>
+        <div className="form-grid">
+          <div className="fg"><div className="fl">ID da Empresa</div><input className="fi" value={empresaMeta.id} readOnly /></div>
+          <div className="fg"><div className="fl">Responsável</div><input className="fi" value={empresaMeta.responsavel} readOnly /></div>
+          <div className="fg"><div className="fl">E-mail do Responsável</div><input className="fi" value={empresaMeta.responsavelEmail} readOnly /></div>
+          <div className="fg"><div className="fl">Criada em</div><input className="fi" value={dataCriacao} readOnly /></div>
+        </div>
+      </div>
+
+      <div style={{background:'var(--glass)',border:'1px solid var(--border)',borderRadius:13,padding:22,marginBottom:14}}>
         <div className="sec-title" style={{marginBottom:14}}>Minha Empresa</div>
         <div className="form-grid">
-          <div className="fg"><div className="fl">Nome da Loja</div><input className="fi" defaultValue="JP Automóveis" /></div>
-          <div className="fg"><div className="fl">CNPJ</div><input className="fi" defaultValue="12.345.678/0001-90" /></div>
-          <div className="fg"><div className="fl">WhatsApp Comercial</div><input className="fi" defaultValue="(85) 99999-0000" /></div>
-          <div className="fg"><div className="fl">E-mail</div><input className="fi" defaultValue="contato@jpautomóveis.com.br" /></div>
-          <div className="fg full"><div className="fl">Endereço</div><input className="fi" defaultValue="Av. Bezerra de Menezes, 1500 — Fortaleza — CE" /></div>
+          <div className="fg"><div className="fl">Nome da Loja</div><input className="fi" value={empresa.nome} onChange={e => setEmpresa(v => ({ ...v, nome: e.target.value }))} /></div>
+          <div className="fg"><div className="fl">CNPJ</div><input className="fi" value={empresa.cnpj} onChange={e => setEmpresa(v => ({ ...v, cnpj: e.target.value }))} /></div>
+          <div className="fg"><div className="fl">WhatsApp Comercial</div><input className="fi" value={empresa.telefone} onChange={e => setEmpresa(v => ({ ...v, telefone: e.target.value }))} /></div>
+          <div className="fg"><div className="fl">E-mail</div><input className="fi" value={empresa.email} onChange={e => setEmpresa(v => ({ ...v, email: e.target.value }))} /></div>
+          <div className="fg"><div className="fl">CEP</div><input className="fi" value={empresa.cep} onChange={e => setEmpresa(v => ({ ...v, cep: e.target.value }))} /></div>
+          <div className="fg"><div className="fl">Número</div><input className="fi" value={empresa.numero} onChange={e => setEmpresa(v => ({ ...v, numero: e.target.value }))} /></div>
+          <div className="fg"><div className="fl">Bairro</div><input className="fi" value={empresa.bairro} onChange={e => setEmpresa(v => ({ ...v, bairro: e.target.value }))} /></div>
+          <div className="fg"><div className="fl">Cidade</div><input className="fi" value={empresa.cidade} onChange={e => setEmpresa(v => ({ ...v, cidade: e.target.value }))} /></div>
+          <div className="fg"><div className="fl">UF</div><input className="fi" maxLength={2} value={empresa.estado} onChange={e => setEmpresa(v => ({ ...v, estado: e.target.value.toUpperCase() }))} /></div>
+          <div className="fg full"><div className="fl">Logradouro</div><input className="fi" value={empresa.logradouro} onChange={e => setEmpresa(v => ({ ...v, logradouro: e.target.value }))} /></div>
         </div>
-        <button className="btn-p" onClick={() => toast('Dados salvos!')}>Salvar</button>
+        <button className="btn-p" onClick={saveEmpresa} disabled={salvando}>{salvando ? 'Salvando...' : 'Salvar'}</button>
       </div>
 
       {/* ── APIs Externas ── */}
@@ -111,29 +218,8 @@ export default function Config() {
                 )}
               </div>
 
-              <Toggle enabled={!!settings[api.key]?.enabled} onToggle={() => toggle(api.key)} />
+              <Toggle enabled={!!settings[api.key]?.enabled} onToggle={() => toggleApi(api.key)} />
             </div>
-          </div>
-        ))}
-      </div>
-
-      {/* ── Integrações de serviços ── */}
-      <div style={{background:'var(--glass)',border:'1px solid var(--border)',borderRadius:13,padding:22}}>
-        <div className="sec-title" style={{marginBottom:14}}>Integrações de Serviços</div>
-        {[
-          {name:'WhatsApp Business',    desc:'Leads automáticos + lembretes de parcela', active:true},
-          {name:'OLX / iCarros',        desc:'Sincronizar estoque automaticamente'},
-          {name:'Instagram / Facebook', desc:'Publicar veículos direto no feed'},
-        ].map((item,i,arr) => (
-          <div key={i} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'13px 0',borderBottom:i<arr.length-1?'1px solid var(--border)':'none'}}>
-            <div>
-              <div style={{fontSize:13.5,fontWeight:500}}>{item.name}</div>
-              <div style={{fontSize:12,color:'var(--muted)',marginTop:2}}>{item.desc}</div>
-            </div>
-            {item.active
-              ? <span className="badge b-g">Ativo</span>
-              : <button className="btn-g" style={{fontSize:12,padding:'6px 13px'}} onClick={() => toast(`Em breve: ${item.name}`)}>Conectar</button>
-            }
           </div>
         ))}
       </div>
